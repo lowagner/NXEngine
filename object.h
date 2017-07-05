@@ -221,6 +221,8 @@ public:
 			int bultype;
 			int nlayers;
 			int wave_amt;
+			int xinertia;
+			int yinertia;
 		} mgun;
 		
 		struct

@@ -178,12 +178,13 @@ void HandlePlayer(void)
 	
 	// apply inertia
 	PDoPhysics();
-	
-	// thud sound when land on some objects
-	if (player->riding && !player->lastriding &&
-		(player->riding->nxflags & NXFLAG_THUD_ON_RIDING))
+
+	// landing on some object
+	if (player->riding && !player->lastriding)
 	{
-		sound(SND_THUD);
+		player->xinertia -= player->riding->xinertia;
+		if (player->riding->nxflags & NXFLAG_THUD_ON_RIDING)
+			sound(SND_THUD);
 	}
 }
 
@@ -215,6 +216,7 @@ void HandlePlayer_am(void)
 		
 		player->yinertia = 0;
 		player->jumping = 0;
+		//printf("landed on something\n");
 	}
 	else if (player->blocku && player->yinertia < 0)
 	{
@@ -237,6 +239,7 @@ void HandlePlayer_am(void)
 		else if (player->bopped_object && player->bopped_object->yinertia != 0)
 		{
 			// no clear yinertia when bop head on OBJ_BLOCK_MOVEV in labyrinth.
+			printf("hit moving object from below, its vel was %d\n", player->bopped_object->yinertia);
 		}
 		else
 		{
@@ -258,10 +261,11 @@ void c------------------------------() {}
 
 void PDoPhysics(void)
 {
-	if (player->xinertia > 0x5ff)  player->xinertia = 0x5ff;
-	if (player->xinertia < -0x5ff) player->xinertia = -0x5ff;
-	if (player->yinertia > 0x5ff)  player->yinertia = 0x5ff;
-	if (player->yinertia < -0x5ff) player->yinertia = -0x5ff;
+    // decel
+	if (player->xinertia > 0x5ff)  player->xinertia -= 0x001;
+	if (player->xinertia < -0x5ff) player->xinertia += 0x001;
+	if (player->yinertia > 0x5ff)  player->yinertia -= 0x001;
+	if (player->yinertia < -0x5ff) player->yinertia += 0x001;
 	
 	if (player->blockd && player->yinertia > 0)
 		player->yinertia = 0;
@@ -416,7 +420,7 @@ int tile;
 	{
 		// setup normal physics constants
 		player->walkspeed = 0x32c;////0x030e;
-		player->fallspeed = 0x5ff;
+		player->fallspeed = 0x5ff; // was 0x5ff, but there's a absolute cap anyway at 0x400
 		
 		player->fallaccel = 0x50;
 		player->jumpfallaccel = 0x20;
@@ -570,6 +574,7 @@ int limit;
 				player->xinertia = 0;
 			}
 		}
+		//printf("landed?\n");
 	}
 	else		// deceleration in air...
 	{
@@ -618,18 +623,23 @@ void PDoFalling(void)
 	// this is for the fans that blow up--you can push JUMP to climb higher.
 	if (player->yinertia < 0 && pinputs[JUMPKEY])
 	{	// use jump gravity
-		if (player->yinertia < player->fallspeed)
-		{
-			player->yinertia += player->jumpfallaccel;
-			if (player->yinertia > player->fallspeed) player->yinertia = player->fallspeed;
-		}
+		player->yinertia += player->jumpfallaccel;
+		// player yinertia is negative (he's going up), so there's no need to check
+		// that his yinertia might be greater than the max here, unless jumpfallaccel is broken.
+		//if (player->yinertia > player->fallspeed) 
+		  //if (!(player->equipmask & EQUIP_BOOSTER20) || (player->booststate == BOOST_OFF))
+		///    player->yinertia = player->fallspeed;
 	}
 	else
 	{	// use normal gravity
 		if (player->yinertia < player->fallspeed)
 		{
 			player->yinertia += player->fallaccel;
-			if (player->yinertia > player->fallspeed) player->yinertia = player->fallspeed;
+			if (player->yinertia > player->fallspeed && (!(player->equipmask & EQUIP_BOOSTER20) || (player->booststate == BOOST_OFF)))
+			{
+				player->yinertia = player->fallspeed + (player->yinertia-player->fallspeed)/2;
+				//printf("halving player's yinertia\n");
+			}
 		}
 		
 		// if we no longer qualify for jump gravity then the jump is over
@@ -648,7 +658,17 @@ void PDoJumping(void)
 			if (!player->jumping)
 			{
 				player->jumping = true;
+				//printf("player yinertia is %d, ", player->yinertia);
 				player->yinertia -= player->jumpvelocity;
+				//printf("jump vel is %d\n ", player->jumpvelocity);
+				if (player->riding)
+				{
+					player->yinertia += player->riding->yinertia;
+					//printf("  ride vel is %d, ", player->riding->yinertia);
+					//printf("  final vel is %d\n", player->yinertia);
+					player->xinertia += player->riding->xinertia;
+					player->riding = NULL;
+				}
 				sound(SND_PLAYER_JUMP);
 			}
 		}
@@ -771,7 +791,7 @@ void PStartBooster(void)
 		
 		// set initial inertia full on
 		if (player->booststate == BOOST_UP || player->booststate == BOOST_DOWN)
-			player->xinertia = 0;
+			player->xinertia >>= 1;
 		
 		switch(player->booststate)
 		{
@@ -785,7 +805,7 @@ void PStartBooster(void)
 			
 			case BOOST_HOZ:
 			{
-				player->yinertia = 0;
+				player->yinertia >>= 1;
 				
 				if (inputs[LEFTKEY])
 					player->xinertia = -0x5ff;
@@ -856,7 +876,12 @@ void PDoBooster(void)
 			if ((player->dir == LEFT && player->blockl) || \
 				(player->dir == RIGHT && player->blockr))
 			{
+				// stuck against a wall, boost up:
 				player->yinertia = -0x100;
+			}
+			else
+			{
+				player->yinertia /= 2;
 			}
 			
 			// this probably isn't the right way to do this, but this
@@ -872,12 +897,16 @@ void PDoBooster(void)
 		case BOOST_UP:
 		{
 			player->yinertia -= 0x20;
+			if (!(pinputs[LEFTKEY] || pinputs[RIGHTKEY]))
+				player->xinertia /= 2;
 		}
 		break;
 		
 		case BOOST_DOWN:
 		{
 			player->yinertia += 0x20;
+			if (!(pinputs[LEFTKEY] || pinputs[RIGHTKEY]))
+				player->xinertia /= 2;
 		}
 		break;
 		
@@ -1004,6 +1033,7 @@ Object *o;
 	{
 		p_xinertia += player->riding->xinertia;
 		p_yinertia += player->riding->yinertia;
+		//printf("ride intertia = %d, player inertia = %d\n",player->riding->yinertia, player->yinertia);
 	}
 	
 	for(i=0;i<nOnscreenObjects;i++)
@@ -1043,7 +1073,10 @@ Object *o;
 			// by an object moving faster than us. handles if you jump while flying
 			// momorin's rocket.
 			if (player->yinertia < 0 && o->yinertia < player->yinertia)
+			{
+				//printf("had to zero since riding was faster up than you\n");
 				player->yinertia = 0;
+			}
 			
 			// handle FLAG_BOUNCY--used eg by treads on Monster X when tipped up
 			if (o->flags & FLAG_BOUNCY)
@@ -1290,7 +1323,8 @@ void PHandleZeroG(void)
 			player->yinertia += (player->yinertia > 0) ? -0x80 : 0x80;
 		}
 	}
-	
+
+	// drag
 	if (player->xinertia > 0x400)  player->xinertia = 0x400;
 	if (player->xinertia < -0x400) player->xinertia = -0x400;
 	if (player->yinertia > 0x400)  player->yinertia = 0x400;
@@ -1389,6 +1423,7 @@ void PDoRepel(void)
 	}
 	
 	// do repel up
+	// (maybe necessary by the Camp in Labyrinth ??? sometimes get stuck in incline.)
 	if (player->CheckAttribute(player->repel_d, player->nrepel_d, TA_SOLID_PLAYER))
 	{
 		if (!player->CheckAttribute(&sprites[player->sprite].block_u, TA_SOLID_PLAYER))

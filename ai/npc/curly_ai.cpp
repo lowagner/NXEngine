@@ -375,7 +375,7 @@ int x, y, dir;
 				{	// create the MGun blast
 					if (!o->animtimer)
 					{
-						FireLevel23MGun(x, y, 2, dir);
+						FireLevel23MGun(x, y, o->xinertia, o->yinertia, 2, dir);
 						
 						o->animtimer = 5;
 						o->timer2--;

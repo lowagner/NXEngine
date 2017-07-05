@@ -142,6 +142,9 @@ Object *shot;
 	else
 		shot->yinertia = o->mgun.wave_amt;
 	
+	shot->xinertia += o->mgun.xinertia;
+	shot->yinertia += o->mgun.yinertia;
+	
 	// fire next layer next time
 	o->mgun.bultype++;
 	if (++o->timer >= o->mgun.nlayers) o->Delete();

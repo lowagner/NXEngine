@@ -1,3 +1,8 @@
+I've changed the physics a bit.  The Labyrinth boss was super annoying to me, because of the ride
+physics.  Inertia is a thing, checkout Newton, Aristotle!  Data is included here, too.
+
+// original Readme
+
 This is a complete open-source clone/rewrite of Doukutsu Monogatari (also known as Cave Story) originally created by rogueeve (kty@lavabit.com). You can browse the original website at http://nxengine.sourceforge.net/. It is released under the GNU General Public License 3; check the LICENSE.txt file or http://www.gnu.org/copyleft/gpl.html for more information about what you can and cannot do with this source code.
 
 This repository has been forked from the latest available version at the time I wrote this readme (NXEngine 1.0.0.4), which I think it was released around 2012-04-29. These are the official requirements as it appeared on the original website when it was forked:

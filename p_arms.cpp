@@ -352,13 +352,16 @@ int x, y, dir;
 		dir = player->look;
 	else
 		dir = player->dir;
-	
+
 	SetupBullet(shot, x, y, btype, dir);
+	shot->xinertia += player->xinertia;
+	shot->yinertia += player->yinertia;
+	
 	return shot;
 }
 
 // fires a bullet at an offset from the exact center of the player's shoot point.
-// FireSimpleBullet can do this too-- but it's xoff/yoff is absolute. This function
+// FireSimpleBullet can do this too-- but its xoff/yoff is absolute. This function
 // takes a parameter for when you are shooting right and extrapolates out the other
 // directions from that. ALSO, xoff/yoff on FireSimpleBullet moves the star;
 // this function does not.
@@ -382,7 +385,6 @@ int dir;
 	Object *shot = FireSimpleBullet(otype, btype);
 	shot->x += xoff;
 	shot->y += yoff;
-	
 	return shot;
 }
 
@@ -399,7 +401,10 @@ static void PFirePolarStar(int level)
 		int xoff;
 		if (level == 2) xoff = -5<<CSF; else xoff = -4<<CSF;
 		
-		FireSimpleBulletOffset(OBJ_POLAR_SHOT, B_PSTAR_L1+level, xoff, 0);
+		Object *shot = FireSimpleBulletOffset(OBJ_POLAR_SHOT, B_PSTAR_L1+level, xoff, 0);
+		shot->xinertia += player->xinertia;
+		shot->yinertia += player->yinertia;
+	
 	}
 }
 
@@ -424,12 +429,14 @@ int x, y;
 			shot->xinertia = random(-0xAA, 0xAA);
 		else
 			shot->yinertia = random(-0xAA, 0xAA);
+		shot->xinertia += player->xinertia;
+		shot->yinertia += player->yinertia;
 	}
 	else
 	{
 		// drop an OBJ_MGUN_SHOOTER object to fire the layers (trail) of the MGun blast.
 		GetPlayerShootPoint(&x, &y);
-		FireLevel23MGun(x, y, level, dir);
+		FireLevel23MGun(x, y, player->xinertia, player->yinertia, level, dir);
 	}
 	
 	// do machine-gun flying
@@ -441,7 +448,7 @@ int x, y;
 
 // fire a level 2 or level 3 MGun blast from position x,y.
 // Broken out here into a seperate sub so OBJ_CURLY_AI can use it also.
-void FireLevel23MGun(int x, int y, int level, int dir)
+void FireLevel23MGun(int x, int y, int xinertia, int yinertia, int level, int dir)
 {
 static const uchar no_layers[] = { 1, 3, 5 };
 static const int bultype_table[] = { 0, B_MGUN_L2, B_MGUN_L3 };
@@ -455,7 +462,11 @@ Object *shot;
 	shot->mgun.bultype = bultype_table[level];
 	shot->mgun.nlayers = no_layers[level];
 	shot->mgun.wave_amt = random(-0xAA, 0xAA);
+	shot->mgun.xinertia = xinertia;
+	shot->mgun.yinertia = yinertia;
 	shot->invisible = true;
+
+	// NEED TO FIGURE OUT HOW TO GIVE THIS GUY VELOCITY! maybe done??
 }
 
 
@@ -502,7 +513,9 @@ int xoff, yoff;
 	bullet_type += level;
 	
 	// level 1 & 2 fires just one missile
-	FireSimpleBulletOffset(object_type, bullet_type, -4<<CSF, 0);
+	o = FireSimpleBulletOffset(object_type, bullet_type, -4<<CSF, 0);
+	o->xinertia += player->xinertia;
+	o->yinertia += player->yinertia;
 	
 	// level 3 fires three missiles, they wave, and are "offset",
 	// so if it's level 3 fire two more missiles.
@@ -521,6 +534,8 @@ int xoff, yoff;
 		else if (o->shot.dir==RIGHT) o->xinertia = -recoil_upper[is_super];
 		else if (o->shot.dir==UP) 	 o->yinertia = recoil_upper[is_super];
 		else 						 o->yinertia = -recoil_upper[is_super];
+		o->xinertia += player->xinertia;
+		o->yinertia += player->yinertia;
 		
 		// this one is lower
 		o = FireSimpleBullet(object_type, bullet_type, xoff, yoff);
@@ -528,6 +543,8 @@ int xoff, yoff;
 		else if (o->shot.dir==RIGHT) o->xinertia = -recoil_lower[is_super];
 		else if (o->shot.dir==UP) 	 o->yinertia = recoil_lower[is_super];
 		else 						 o->yinertia = -recoil_lower[is_super];
+		o->xinertia += player->xinertia;
+		o->yinertia += player->yinertia;
 	}
 }
 
@@ -561,18 +578,21 @@ int count;
 		case RIGHT: fb->xinertia = 0x400; break;
 		
 		case UP:
-			fb->xinertia = player->xinertia + ((player->dir==RIGHT) ? 128 : -128);
+			fb->xinertia = ((player->dir==RIGHT) ? 128 : -128);
 			if (player->xinertia) fb->dir = (player->xinertia > 0) ? RIGHT:LEFT;
 			fb->yinertia = -0x5ff;
 		break;
 		
 		case DOWN:
-			fb->xinertia = player->xinertia;
+			fb->xinertia = 0; //player->xinertia;
 			if (player->xinertia) fb->dir = (player->xinertia > 0) ? RIGHT:LEFT;
 			fb->yinertia = 0x5ff;
 		break;
 	}
 
+	fb->xinertia += player->xinertia;
+	fb->yinertia += player->yinertia;
+	//printf("player inertia %d, fb inertia %d\n",player->yinertia, fb->yinertia);
 }
 
 static void PFireBlade(int level)
@@ -606,6 +626,9 @@ static void PFireBlade(int level)
 	
 	Object *shot = CreateObject(x, y, (level != 2) ? OBJ_BLADE12_SHOT : OBJ_BLADE3_SHOT);
 	SetupBullet(shot, x, y, B_BLADE_L1+level, dir);
+	    
+	shot->xinertia += player->xinertia;
+	shot->yinertia += player->yinertia;
 }
 
 /*
@@ -624,7 +647,9 @@ static void PFireSnake(int level)
 	}
 	
 	int object_type = (level == 0) ? OBJ_SNAKE1_SHOT : OBJ_SNAKE23_SHOT;
-	FireSimpleBulletOffset(object_type, B_SNAKE_L1+level, -5<<CSF, 0);
+	Object *shot = FireSimpleBulletOffset(object_type, B_SNAKE_L1+level, -5<<CSF, 0);
+	shot->xinertia += player->xinertia;
+	shot->yinertia += player->yinertia;
 }
 
 
@@ -633,7 +658,9 @@ static void PFireNemesis(int level)
 	if (CountObjectsOfType(OBJ_NEMESIS_SHOT) >= 2)
 		return;
 	
-	FireSimpleBullet(OBJ_NEMESIS_SHOT, B_NEMESIS_L1+level);
+	Object *shot = FireSimpleBullet(OBJ_NEMESIS_SHOT, B_NEMESIS_L1+level);
+	shot->xinertia += player->xinertia;
+	shot->yinertia += player->yinertia;
 }
 
 
@@ -648,7 +675,9 @@ static const int max_bubbles[] = { 4, 16, 16 };
 		return;
 	
 	int objtype = (level != 2) ? OBJ_BUBBLER12_SHOT : OBJ_BUBBLER3_SHOT;
-	FireSimpleBulletOffset(objtype, B_BUBBLER_L1+level, -4<<CSF, 0);
+	Object *shot = FireSimpleBulletOffset(objtype, B_BUBBLER_L1+level, -4<<CSF, 0);
+	shot->xinertia += player->xinertia;
+	shot->yinertia += player->yinertia;
 }
 
 /*
@@ -669,7 +698,11 @@ void c------------------------------() {}
 static void PFireSpur(void)
 {
 	if (can_fire_spur())
-		FireSimpleBulletOffset(OBJ_POLAR_SHOT, B_PSTAR_L3, -4<<CSF, 0);
+	{
+		Object *shot = FireSimpleBulletOffset(OBJ_POLAR_SHOT, B_PSTAR_L3, -4<<CSF, 0);
+		shot->xinertia += player->xinertia;
+		shot->yinertia += player->yinertia;
+	}
 }
 
 // fires and handles charged shots
@@ -720,7 +753,9 @@ Weapon *spur = &player->weapons[WPN_SPUR];
 			if (spur->level > 0 && can_fire_spur())
 			{
 				int level = IsWeaponMaxed() ? 2 : (spur->level - 1);
-				FireSimpleBulletOffset(OBJ_SPUR_SHOT, B_SPUR_L1+level, -4<<CSF, 0);
+				Object *shot = FireSimpleBulletOffset(OBJ_SPUR_SHOT, B_SPUR_L1+level, -4<<CSF, 0);
+				shot->xinertia += player->xinertia;
+				shot->yinertia += player->yinertia;
 			}
 			
 			spur->chargetimer = 0;

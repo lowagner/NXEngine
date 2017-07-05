@@ -43,8 +43,8 @@ void ai_fireball(Object *o)
 	
 	// fall
 	o->yinertia += 0x55;
-	if (o->yinertia > 0x3ff) o->yinertia = 0x3ff;
-	
+	if (o->yinertia > 0x3ff) 
+		 o->yinertia = 0x3ff + 4*(o->yinertia-0x3ff)/5;
 	// hit ceil
 	if (o->blocku && o->yinertia < 0) o->yinertia = 0;
 	
